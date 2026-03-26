@@ -146,7 +146,8 @@ aajkamudda/
 ## 🔒 Performance & Handover Notes
 1. **MySQL Optimized:** Project migrated from MongoDB to MySQL using Sequelize for better compatibility with shared hosting (Hostinger).
 2. **Connection Pooling:** Backend uses Sequelize connection pooling to stay within database connection limits.
-3. **Admin Assets:** Standard Admin Login is `admin@news.com` / `admin123`.
+3. **Render Keep-Awake (Free Tier):** If deploying the backend on Render's free tier, the server will "sleep" after 15 minutes of inactivity. Use a free service like **cron-job.org** to ping `https://your-api.onrender.com/api/v1/healthcheck` every 10 minutes to keep it always awake.
+4. **Admin Assets:** Standard Admin Login is `admin@news.com` / `admin123`.
 
 ---
 *Developed for Aaj Ka Mudda news portal.*

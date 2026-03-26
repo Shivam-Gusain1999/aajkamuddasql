@@ -49,6 +49,7 @@ import videoRouter from "./routes/video.routes.js";
 import webstoryRouter from "./routes/webstory.routes.js";
 import adRouter from "./routes/ad.routes.js";
 import settingsRouter from "./routes/settings.routes.js";
+import healthcheckRouter from "./routes/healthcheck.routes.js";
 
 // 7. Routes Declaration
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -64,6 +65,7 @@ app.use("/api/v1/videos", videoRouter);
 app.use("/api/v1/webstories", webstoryRouter);
 app.use("/api/v1/ads", adRouter);
 app.use("/api/v1/settings", settingsRouter);
+app.use("/api/v1/healthcheck", healthcheckRouter);
 
 // 8. Global Error Handler (Hamesha sabse last mein)
 app.use(globalErrorHandler);
