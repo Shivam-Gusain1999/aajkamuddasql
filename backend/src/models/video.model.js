@@ -1,47 +1,59 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const videoSchema = new Schema(
+const Video = sequelize.define(
+  "Video",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     title: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(500),
+      allowNull: false,
     },
     description: {
-      type: String,
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     videoUrl: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING(500),
+      allowNull: false,
     },
     thumbnail: {
-      type: String, // Cloudinary URL or extracted from YouTube
+      type: DataTypes.STRING(500), // Cloudinary URL or YouTube thumbnail
+      allowNull: true,
     },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    categoryId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "categories",
+        key: "id",
+      },
     },
     status: {
-      type: String,
-      enum: ["DRAFT", "PUBLISHED", "ARCHIVED"],
-      default: "DRAFT",
+      type: DataTypes.ENUM("DRAFT", "PUBLISHED", "ARCHIVED"),
+      defaultValue: "DRAFT",
     },
     isTopVideo: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     views: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
   {
+    tableName: "videos",
     timestamps: true,
-  },
+    indexes: [
+      { fields: ["status", "createdAt"] },
+      { fields: ["categoryId", "status", "createdAt"] },
+    ],
+  }
 );
 
-videoSchema.index({ status: 1, createdAt: -1 });
-videoSchema.index({ category: 1, status: 1, createdAt: -1 });
-
-export const Video = mongoose.model("Video", videoSchema);
+export { Video };

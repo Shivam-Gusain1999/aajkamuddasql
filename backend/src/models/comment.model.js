@@ -1,31 +1,44 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const commentSchema = new Schema(
+const Comment = sequelize.define(
+  "Comment",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     content: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.TEXT,
+      allowNull: false,
     },
-    article: {
-      type: Schema.Types.ObjectId,
-      ref: "Article",
-      required: true,
-      index: true,
+    articleId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "articles",
+        key: "id",
+      },
     },
-    author: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+    authorId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "users",
+        key: "id",
+      },
     },
-    // Add this new field
     status: {
-      type: String,
-      enum: ["Pending", "Approved", "Rejected"],
-      default: "Pending"
-    }
+      type: DataTypes.ENUM("Pending", "Approved", "Rejected"),
+      defaultValue: "Pending",
+    },
   },
-  { timestamps: true }
+  {
+    tableName: "comments",
+    timestamps: true,
+    indexes: [{ fields: ["articleId"] }],
+  }
 );
 
-export const Comment = mongoose.model("Comment", commentSchema);
+export { Comment };

@@ -1,9 +1,8 @@
-import { WebStory } from "../models/webstory.model.js";
+import { WebStory, Category } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import mongoose from "mongoose";
 
 // ==================== CREATE WEBSTORY ====================
 const createWebStory = asyncHandler(async (req, res) => {
@@ -23,13 +22,15 @@ const createWebStory = asyncHandler(async (req, res) => {
 
   const story = await WebStory.create({
     title,
-    category,
+    categoryId: category,
     status: status || "DRAFT",
     image: uploaded.url,
     articleUrl: articleUrl || "",
   });
 
-  const populatedStory = await WebStory.findById(story._id).populate("category", "name");
+  const populatedStory = await WebStory.findByPk(story.id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   return res
     .status(201)
@@ -40,18 +41,20 @@ const createWebStory = asyncHandler(async (req, res) => {
 const getWebStories = asyncHandler(async (req, res) => {
   const { status, limit } = req.query;
 
-  const matchCondition = {};
-  if (status) matchCondition.status = status;
+  const whereCondition = {};
+  if (status) whereCondition.status = status;
 
-  let query = WebStory.find(matchCondition)
-    .populate("category", "name")
-    .sort({ createdAt: -1 });
+  const queryOptions = {
+    where: whereCondition,
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+    order: [["createdAt", "DESC"]],
+  };
 
   if (limit) {
-    query = query.limit(parseInt(limit));
+    queryOptions.limit = parseInt(limit);
   }
 
-  const stories = await query;
+  const stories = await WebStory.findAll(queryOptions);
 
   return res
     .status(200)
@@ -62,17 +65,17 @@ const getWebStories = asyncHandler(async (req, res) => {
 const getWebStoryById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid WebStory ID");
   }
 
-  const story = await WebStory.findByIdAndUpdate(
-    id,
-    { $inc: { views: 1 } },
-    { new: true }
-  ).populate("category", "name");
+  const story = await WebStory.findByPk(id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   if (!story) throw new ApiError(404, "Web Story not found");
+
+  await story.increment("views");
 
   return res
     .status(200)
@@ -84,15 +87,15 @@ const updateWebStory = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, category, status, articleUrl } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid WebStory ID");
   }
 
-  const story = await WebStory.findById(id);
+  const story = await WebStory.findByPk(id);
   if (!story) throw new ApiError(404, "Web Story not found");
 
   if (title) story.title = title;
-  if (category) story.category = category;
+  if (category) story.categoryId = category;
   if (status) story.status = status;
   if (articleUrl !== undefined) story.articleUrl = articleUrl;
 
@@ -103,7 +106,9 @@ const updateWebStory = asyncHandler(async (req, res) => {
   }
 
   await story.save();
-  const populatedStory = await WebStory.findById(story._id).populate("category", "name");
+  const populatedStory = await WebStory.findByPk(story.id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   return res
     .status(200)
@@ -114,14 +119,14 @@ const updateWebStory = asyncHandler(async (req, res) => {
 const deleteWebStory = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid WebStory ID");
   }
 
-  const story = await WebStory.findById(id);
+  const story = await WebStory.findByPk(id);
   if (!story) throw new ApiError(404, "Web Story not found");
 
-  await WebStory.findByIdAndDelete(id);
+  await story.destroy();
 
   return res
     .status(200)

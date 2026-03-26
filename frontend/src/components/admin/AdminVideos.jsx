@@ -111,7 +111,7 @@ const AdminVideos = () => {
     setFormData({
       title: video.title || "",
       description: video.description || "",
-      category: video.category?._id || video.category || "",
+      category: video.category?._id || video.category?.id || video.category || "",
       videoUrl: video.videoUrl || "",
       status: video.status || "DRAFT"
     });

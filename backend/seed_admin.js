@@ -1,19 +1,21 @@
 import 'dotenv/config';
-import mongoose from 'mongoose';
-import { User } from './src/models/user.model.js';
+import { User } from './src/models/index.js';
+import { sequelize } from './src/config/db.js';
 
 async function seedAdmin() {
     try {
-        console.log('Connecting to database...');
-        await mongoose.connect(process.env.MONGODB_URI);
+        console.log('Connecting to MySQL database...');
+        await sequelize.authenticate();
+        
+        // Sync only the User table
+        await User.sync({ alter: true });
         
         const adminEmail = 'admin@news.com';
-        const existingAdmin = await User.findOne({ email: adminEmail });
+        const existingAdmin = await User.findOne({ where: { email: adminEmail } });
 
         if (existingAdmin) {
             console.log('Admin user already exists. Updating role to Ensure ADMIN access.');
             existingAdmin.role = 'ADMIN';
-            // Also updating password to 'admin123' so the user exactly knows how to login
             existingAdmin.password = 'admin123';
             await existingAdmin.save();
             console.log('✅ Admin user updated successfully.');
@@ -24,7 +26,7 @@ async function seedAdmin() {
                 username: 'superadmin',
                 email: adminEmail,
                 password: 'admin123',
-                role: 'ADMIN' // Set role directly
+                role: 'ADMIN'
             });
             console.log('✅ Admin user created successfully:', adminUser.email);
         }
@@ -37,7 +39,7 @@ async function seedAdmin() {
     } catch (e) {
         console.error('❌ Failed to seed admin:', e.message);
     } finally {
-        await mongoose.disconnect();
+        await sequelize.close();
         console.log('Database disconnected.');
     }
 }

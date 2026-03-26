@@ -65,7 +65,7 @@ export const createArticleSchema = z.object({
     .min(20, "Content must be at least 20 characters"),
   category: z
     .string({ required_error: "Category is required" })
-    .regex(/^[0-9a-fA-F]{24}$/, "Invalid category ID"),
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Invalid category ID"),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
 });
 
@@ -74,7 +74,7 @@ export const updateArticleSchema = z.object({
   content: z.string().min(20).optional(),
   category: z
     .string()
-    .regex(/^[0-9a-fA-F]{24}$/, "Invalid category ID")
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Invalid category ID")
     .optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
 });

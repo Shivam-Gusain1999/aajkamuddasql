@@ -1,53 +1,65 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const articleSchema = new Schema(
+const Article = sequelize.define(
+  "Article",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     title: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(500),
+      allowNull: false,
     },
     slug: {
-      type: String, // e.g., 'cricket-world-cup-2027'
-      required: true,
+      type: DataTypes.STRING(600),
+      allowNull: false,
       unique: true,
-      lowercase: true,
-      index: true,
     },
     content: {
-      type: String,
-      required: true,
+      type: DataTypes.TEXT("long"),
+      allowNull: false,
     },
     thumbnail: {
-      type: String, // Cloudinary URL
-      default: "",
+      type: DataTypes.STRING(500), // Cloudinary URL
+      defaultValue: "",
     },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    categoryId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "categories",
+        key: "id",
+      },
     },
-    author: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+    authorId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "users",
+        key: "id",
+      },
     },
     status: {
-      type: String,
-      enum: ["DRAFT", "PUBLISHED", "ARCHIVED"],
-      default: "DRAFT",
+      type: DataTypes.ENUM("DRAFT", "PUBLISHED", "ARCHIVED"),
+      defaultValue: "DRAFT",
     },
     views: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
   {
+    tableName: "articles",
     timestamps: true,
-  },
+    indexes: [
+      { fields: ["status", "createdAt"] },
+      { fields: ["categoryId", "status", "createdAt"] },
+      { fields: ["slug"] },
+    ],
+  }
 );
 
-articleSchema.index({ status: 1, createdAt: -1 });
-articleSchema.index({ category: 1, status: 1, createdAt: -1 });
-
-export const Article = mongoose.model("Article", articleSchema);
+export { Article };

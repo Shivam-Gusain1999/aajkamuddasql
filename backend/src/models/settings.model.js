@@ -1,35 +1,45 @@
-import mongoose from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const settingsSchema = new mongoose.Schema(
+const Settings = sequelize.define(
+  "Settings",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     siteName: {
-      type: String,
-      default: "Times News",
-      required: true,
+      type: DataTypes.STRING(255),
+      defaultValue: "Aaj Ka Mudda",
+      allowNull: false,
     },
     contactEmail: {
-      type: String,
-      default: "admin@timesnews.com",
-      required: true,
+      type: DataTypes.STRING(255),
+      defaultValue: "admin@aajkamudda.com",
+      allowNull: false,
     },
     seoDescription: {
-      type: String,
-      default: "The latest news and updates.",
+      type: DataTypes.TEXT,
+      defaultValue: "The latest news and updates.",
     },
     facebookUrl: {
-      type: String,
-      default: "https://facebook.com",
+      type: DataTypes.STRING(500),
+      defaultValue: "https://facebook.com",
     },
     twitterUrl: {
-      type: String,
-      default: "https://twitter.com",
+      type: DataTypes.STRING(500),
+      defaultValue: "https://twitter.com",
     },
     maintenanceMode: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
   },
-  { timestamps: true }
+  {
+    tableName: "settings",
+    timestamps: true,
+  }
 );
 
-export const Settings = mongoose.model("Settings", settingsSchema);
+export { Settings };

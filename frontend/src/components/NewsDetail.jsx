@@ -44,16 +44,16 @@ const NewsDetail = () => {
     // ── ALWAYS FETCH COMMENTS when article is available ──
     useEffect(() => {
         const fetchComments = async () => {
-            if (!article?._id) return;
+            if (!(article?._id || article?.id)) return;
             try {
-                const { data } = await api.get(`/comments/article/${article._id}`);
+                const { data } = await api.get(`/comments/article/${article._id || article.id}`);
                 setComments(data.data || []);
             } catch (err) {
                 console.error("Failed to fetch comments", err);
             }
         };
         fetchComments();
-    }, [article?._id]);
+    }, [article?._id, article?.id]);
 
     // ── FETCH RELATED NEWS from same category ──
     useEffect(() => {
@@ -63,20 +63,20 @@ const NewsDetail = () => {
                 const { data } = await api.get(`/articles?category=${article.category.name}&limit=5`);
                 const articles = data.data?.articles || [];
                 // Filter out the current article
-                setRelatedNews(articles.filter(a => a._id !== article._id).slice(0, 4));
+                setRelatedNews(articles.filter(a => (a._id || a.id) !== (article._id || article.id)).slice(0, 4));
             } catch (err) {
                 console.error("Failed to fetch related news", err);
             }
         };
         fetchRelated();
-    }, [article?.category?.name, article?._id]);
+    }, [article?.category?.name, article?._id, article?.id]);
 
     const handleCommentSubmit = async (e) => {
         e.preventDefault();
         if (!newComment.trim()) return;
 
         try {
-            const { data } = await api.post(`/comments/${article._id}`, { content: newComment });
+            const { data } = await api.post(`/comments/${article._id || article.id}`, { content: newComment });
             setComments(prev => [data.data, ...prev]);
             setNewComment("");
         } catch (err) {
@@ -102,7 +102,7 @@ const NewsDetail = () => {
     if (loading) return <div className='p-4 text-center mt-10'>Loading article...</div>;
     if (!article) return <div className='p-4 text-center mt-10'>Article not found</div>;
 
-    const isExternal = !article._id;
+    const isExternal = !(article._id || article.id);
     const metaDescription = article.content ? article.content.replace(/<[^>]*>?/gm, '').substring(0, 155) + '...' : article.title;
 
     return (
@@ -191,7 +191,7 @@ const NewsDetail = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {relatedNews.map((item) => (
                                         <div
-                                            key={item._id}
+                                            key={item._id || item.id}
                                             className="bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition group"
                                             onClick={() => navigate(`/news/${item.slug}`, { state: item })}
                                         >

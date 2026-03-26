@@ -1,4 +1,4 @@
-import { Settings } from "../models/settings.model.js";
+import { Settings } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 

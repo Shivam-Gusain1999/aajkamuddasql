@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+// Import models index to register associations BEFORE sync
+import "./models/index.js";
 import connectDB from "./config/db.js";
 import { app } from "./app.js";
 
@@ -19,5 +21,5 @@ connectDB()
     });
   })
   .catch((err) => {
-    console.log("MONGO db connection failed !!! ", err);
+    console.log("MySQL db connection failed !!! ", err);
   });

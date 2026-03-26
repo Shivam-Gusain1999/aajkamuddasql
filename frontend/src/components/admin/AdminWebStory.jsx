@@ -108,7 +108,7 @@ const AdminWebStories = () => {
   const handleEdit = (story) => {
     setFormData({
       title: story.title || "",
-      category: story.category?._id || story.category || "",
+      category: story.category?._id || story.category?.id || story.category || "",
       status: story.status || "DRAFT",
       articleUrl: story.articleUrl || ""
     });

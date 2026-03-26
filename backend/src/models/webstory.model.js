@@ -1,39 +1,47 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const webStorySchema = new Schema(
+const WebStory = sequelize.define(
+  "WebStory",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     title: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(500),
+      allowNull: false,
     },
     image: {
-      type: String, 
-      required: true,
+      type: DataTypes.STRING(500),
+      allowNull: false,
     },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    categoryId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "categories",
+        key: "id",
+      },
     },
     status: {
-      type: String,
-      enum: ["DRAFT", "PUBLISHED", "ARCHIVED"],
-      default: "DRAFT",
+      type: DataTypes.ENUM("DRAFT", "PUBLISHED", "ARCHIVED"),
+      defaultValue: "DRAFT",
     },
     views: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
     articleUrl: {
-      type: String,
-      trim: true,
-      default: "",
+      type: DataTypes.STRING(500),
+      defaultValue: "",
     },
   },
   {
+    tableName: "webstories",
     timestamps: true,
-  },
+  }
 );
 
-export const WebStory = mongoose.model("WebStory", webStorySchema);
+export { WebStory };

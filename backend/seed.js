@@ -1,12 +1,7 @@
 import "dotenv/config";
-import mongoose from "mongoose";
-import { Category } from "./src/models/category.model.js";
-import { Article } from "./src/models/article.model.js";
-import { Video } from "./src/models/video.model.js";
-import { User } from "./src/models/user.model.js";
-import { WebStory } from "./src/models/webstory.model.js";
-
-const MONGODB_URI = process.env.MONGODB_URI;
+import { Sequelize } from "sequelize";
+import { User, Category, Article, Video, WebStory } from "./src/models/index.js";
+import { sequelize } from "./src/config/db.js";
 
 const categories = [
   { name: "देश", description: "राष्ट्रीय समाचार" },
@@ -239,25 +234,26 @@ const videosData = [
 
 async function seed() {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log("✅ Connected to MongoDB");
+    await sequelize.authenticate();
+    console.log("✅ Connected to MySQL");
 
-    // Find admin user
-    let admin = await User.findOne({ role: "ADMIN" });
-    if (!admin) {
-      admin = await User.findOne({});
-    }
-    if (!admin) {
-      console.error("❌ No user found in database! Create a user first.");
-      process.exit(1);
-    }
-    console.log(`👤 Using author: ${admin.fullName} (${admin.role})`);
+    // Sync all models
+    await sequelize.sync({ alter: true });
+    console.log("✅ All tables synced");
 
-    // Clear existing data
-    await Category.deleteMany({});
-    await Article.deleteMany({});
-    await Video.deleteMany({});
-    console.log("🗑️  Cleared old categories, articles, videos");
+    // Ensure admin user exists
+    let admin = await User.findOne({ where: { role: "ADMIN" } });
+    if (!admin) {
+      console.log("👤 Admin not found, creating default admin...");
+      admin = await User.create({
+        fullName: 'Super Admin',
+        username: 'superadmin',
+        email: 'admin@news.com',
+        password: 'admin123',
+        role: 'ADMIN'
+      });
+    }
+    console.log(`👤 Using author: ${admin.fullName} (${admin.id})`);
 
     // Create categories
     const catDocs = {};
@@ -279,8 +275,8 @@ async function seed() {
           slug: art.slug,
           content: art.content,
           thumbnail: art.thumbnail,
-          category: category._id,
-          author: admin._id,
+          categoryId: category.id,
+          authorId: admin.id,
           status: "PUBLISHED",
           views: Math.floor(Math.random() * 5000) + 500,
         });
@@ -298,14 +294,14 @@ async function seed() {
         title: vid.title,
         videoUrl: vid.videoUrl,
         description: vid.description,
-        category: category._id,
+        categoryId: category.id,
         status: "PUBLISHED",
         views: Math.floor(Math.random() * 10000) + 1000,
       });
     }
     console.log(`🎬 Created ${videosData.length} videos`);
 
-    console.log("\n🎉 Seed complete! Your database is now populated with realistic Hindi news.");
+    console.log("\n🎉 Seed complete! Your MySQL database is now populated with realistic Hindi news.");
     process.exit(0);
   } catch (err) {
     console.error("❌ Seed failed:", err);

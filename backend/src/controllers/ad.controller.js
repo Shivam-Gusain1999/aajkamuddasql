@@ -1,9 +1,9 @@
-import { Ad } from "../models/ad.model.js";
+import { Ad } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import mongoose from "mongoose";
+import { Op } from "sequelize";
 
 const createAd = asyncHandler(async (req, res) => {
   const { title, link, isActive, type, scriptCode, placement } = req.body;
@@ -30,8 +30,8 @@ const createAd = asyncHandler(async (req, res) => {
     title,
     type: adType,
     placement: placement || 'both',
-    scriptCode: adType === 'script' ? scriptCode : undefined,
-    link: adType === 'banner' ? link : undefined,
+    scriptCode: adType === 'script' ? scriptCode : null,
+    link: adType === 'banner' ? link : null,
     imageUrl: finalImageUrl,
     isActive: isActive !== undefined ? isActive : true,
   });
@@ -42,17 +42,23 @@ const createAd = asyncHandler(async (req, res) => {
 // ==================== GET ALL ADS ====================
 const getAds = asyncHandler(async (req, res) => {
   const { activeOnly, placement } = req.query;
-  const matchCondition = {};
-  
+  const whereCondition = {};
+
   if (activeOnly === "true") {
-    matchCondition.isActive = true;
-  }
-  
-  if (placement) {
-    matchCondition.$or = [{ placement }, { placement: 'both' }];
+    whereCondition.isActive = true;
   }
 
-  const ads = await Ad.find(matchCondition).sort({ createdAt: -1 });
+  if (placement) {
+    whereCondition[Op.or] = [
+      { placement },
+      { placement: 'both' },
+    ];
+  }
+
+  const ads = await Ad.findAll({
+    where: whereCondition,
+    order: [["createdAt", "DESC"]],
+  });
 
   return res.status(200).json(
     new ApiResponse(200, { ads }, "Ads fetched successfully")
@@ -63,11 +69,11 @@ const getAds = asyncHandler(async (req, res) => {
 const getAdById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid ad ID");
   }
 
-  const ad = await Ad.findById(id);
+  const ad = await Ad.findByPk(id);
   if (!ad) throw new ApiError(404, "Ad not found");
 
   return res.status(200).json(new ApiResponse(200, ad, "Ad fetched successfully"));
@@ -77,11 +83,11 @@ const updateAd = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, link, isActive, type, scriptCode, placement } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid ad ID");
   }
 
-  const ad = await Ad.findById(id);
+  const ad = await Ad.findByPk(id);
   if (!ad) throw new ApiError(404, "Ad not found");
 
   if (title) ad.title = title;
@@ -91,13 +97,12 @@ const updateAd = asyncHandler(async (req, res) => {
 
   if (ad.type === 'script') {
     if (scriptCode !== undefined) ad.scriptCode = scriptCode;
-    // Clear out banner fields if switching to script
-    ad.link = undefined;
-    ad.imageUrl = undefined;
+    ad.link = null;
+    ad.imageUrl = null;
   } else {
     if (link) ad.link = link;
-    ad.scriptCode = undefined;
-    
+    ad.scriptCode = null;
+
     const imageLocalPath = req.file?.path;
     if (imageLocalPath) {
       const uploadedImage = await uploadOnCloudinary(imageLocalPath);
@@ -114,14 +119,14 @@ const updateAd = asyncHandler(async (req, res) => {
 const deleteAd = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid ad ID");
   }
 
-  const ad = await Ad.findById(id);
+  const ad = await Ad.findByPk(id);
   if (!ad) throw new ApiError(404, "Ad not found");
 
-  await Ad.findByIdAndDelete(id);
+  await ad.destroy();
 
   return res.status(200).json(new ApiResponse(200, {}, "Ad deleted successfully"));
 });

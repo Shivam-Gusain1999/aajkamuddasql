@@ -87,7 +87,7 @@ const AdminAds = () => {
     setLink(ad.link || "");
     setScriptCode(ad.scriptCode || "");
     setIsActive(ad.isActive);
-    setEditingId(ad._id);
+    setEditingId(ad._id || ad.id);
     setImage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -97,7 +97,7 @@ const AdminAds = () => {
     if (!window.confirm("Delete this ad?")) return;
     try {
       await api.delete(`/ads/${id}`);
-      setAds((prev) => prev.filter((a) => a._id !== id));
+      setAds((prev) => prev.filter((a) => (a._id || a.id) !== id));
     } catch (err) {
       console.error(err);
       alert("Failed to delete ad");
@@ -106,7 +106,7 @@ const AdminAds = () => {
 
   const toggleActive = async (ad) => {
     try {
-      await api.patch(`/ads/${ad._id}`, { isActive: !ad.isActive });
+      await api.patch(`/ads/${ad._id || ad.id}`, { isActive: !ad.isActive });
       fetchAds();
     } catch (err) {
       console.error(err);
@@ -289,7 +289,7 @@ const AdminAds = () => {
                 <ul className="divide-y divide-slate-100">
                   {ads.map((ad) => (
                     <li
-                      key={ad._id}
+                      key={ad._id || ad.id}
                       className="flex items-center justify-between p-4 px-6 hover:bg-slate-50 transition-colors group"
                     >
                       <div className="flex items-center gap-5">
@@ -334,7 +334,7 @@ const AdminAds = () => {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(ad._id)}
+                          onClick={() => handleDelete(ad._id || ad.id)}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
                           title="Delete"
                         >

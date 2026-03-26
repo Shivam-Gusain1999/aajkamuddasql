@@ -111,7 +111,7 @@ const AdminNews = () => {
     setFormData({
       title: article.title || "",
       content: article.content || "",
-      category: article.category?._id || article.category || "",
+      category: article.category?._id || article.category?.id || article.category || "",
       status: article.status || "DRAFT",
       thumbnail: null,
     });

@@ -1,4 +1,4 @@
-import { Category } from "../models/category.model.js";
+import { Category } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -13,7 +13,9 @@ const createCategory = asyncHandler(async (req, res) => {
   const nameToLowerCase = name.toLowerCase().trim();
 
   // Check if category already exists
-  const existingCategory = await Category.findOne({ name: nameToLowerCase });
+  const existingCategory = await Category.findOne({
+    where: { name: nameToLowerCase },
+  });
   if (existingCategory) {
     throw new ApiError(409, "Category with this name already exists");
   }
@@ -33,7 +35,9 @@ const createCategory = asyncHandler(async (req, res) => {
 });
 
 const getAllCategories = asyncHandler(async (req, res) => {
-  const categories = await Category.find({}).sort({ createdAt: -1 });
+  const categories = await Category.findAll({
+    order: [["createdAt", "DESC"]],
+  });
 
   return res
     .status(200)
@@ -48,7 +52,7 @@ const updateCategory = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Category name is required");
   }
 
-  const category = await Category.findById(categoryId);
+  const category = await Category.findByPk(categoryId);
 
   if (!category) {
     throw new ApiError(404, "Category not found");
@@ -69,11 +73,13 @@ const updateCategory = asyncHandler(async (req, res) => {
 const deleteCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
 
-  const category = await Category.findByIdAndDelete(categoryId);
+  const category = await Category.findByPk(categoryId);
 
   if (!category) {
     throw new ApiError(404, "Category not found or already deleted");
   }
+
+  await category.destroy();
 
   return res
     .status(200)

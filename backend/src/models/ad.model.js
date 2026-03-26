@@ -1,39 +1,47 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 
-const adSchema = new Schema(
+const Ad = sequelize.define(
+  "Ad",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     title: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     type: {
-      type: String,
-      enum: ['banner', 'script'],
-      default: 'banner',
+      type: DataTypes.ENUM("banner", "script"),
+      defaultValue: "banner",
     },
     placement: {
-      type: String,
-      enum: ['sidebar', 'feed', 'both'],
-      default: 'both',
+      type: DataTypes.ENUM("sidebar", "feed", "both"),
+      defaultValue: "both",
     },
     imageUrl: {
-      type: String, // Optional for scripts
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
     link: {
-      type: String, // Optional for scripts
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
     scriptCode: {
-      type: String, // Only used when type is 'script'
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     isActive: {
-      type: Boolean,
-      default: true,
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
   },
   {
+    tableName: "ads",
     timestamps: true,
   }
 );
 
-export const Ad = mongoose.model("Ad", adSchema);
+export { Ad };

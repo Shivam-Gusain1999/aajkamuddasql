@@ -1,14 +1,13 @@
-import { Video } from "../models/video.model.js";
-import { Category } from "../models/category.model.js";
+import { Video, Category } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import mongoose from "mongoose";
+import { Op } from "sequelize";
 
 // Utility: Extract YouTube Video ID
 const getYoutubeVideoId = (url) => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
 };
@@ -29,7 +28,6 @@ const createVideo = asyncHandler(async (req, res) => {
     if (!uploaded) throw new ApiError(400, "Thumbnail upload failed");
     thumbnailUrl = uploaded.url;
   } else {
-    // Try expanding from youtube
     const ytId = getYoutubeVideoId(videoUrl);
     if (ytId) {
       thumbnailUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
@@ -40,18 +38,19 @@ const createVideo = asyncHandler(async (req, res) => {
     title,
     description,
     videoUrl,
-    category,
+    categoryId: category,
     status: status || "DRAFT",
     thumbnail: thumbnailUrl,
   });
 
-  const populatedVideo = await Video.findById(video._id).populate("category", "name");
+  const populatedVideo = await Video.findByPk(video.id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   return res
     .status(201)
     .json(new ApiResponse(201, populatedVideo, "Video created successfully"));
 });
-
 
 // ==================== GET VIDEOS (WITH CATEGORY FILTER) ====================
 const getVideos = asyncHandler(async (req, res) => {
@@ -59,32 +58,36 @@ const getVideos = asyncHandler(async (req, res) => {
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
 
-  const matchCondition = {};
-  if (status) matchCondition.status = status;
+  const whereCondition = {};
+  if (status) whereCondition.status = status;
 
-  // Category filter — match by name like articles do
   if (category) {
     const decodedCategory = decodeURIComponent(category).trim();
     const categoryDoc = await Category.findOne({
-      name: { $regex: new RegExp(`^${decodedCategory}$`, 'i') }
+      where: { name: { [Op.like]: decodedCategory } },
     });
     if (categoryDoc) {
-      matchCondition.category = categoryDoc._id;
+      whereCondition.categoryId = categoryDoc.id;
     } else {
       return res.status(200).json(
-        new ApiResponse(200, { videos: [], pagination: { currentPage: pageNum, totalPages: 0, totalDocuments: 0, hasNextPage: false } }, "No videos for this category")
+        new ApiResponse(200, {
+          videos: [],
+          pagination: { currentPage: pageNum, totalPages: 0, totalDocuments: 0, hasNextPage: false },
+        }, "No videos for this category")
       );
     }
   }
 
-  const totalDocuments = await Video.countDocuments(matchCondition);
+  const totalDocuments = await Video.count({ where: whereCondition });
   const totalPages = Math.ceil(totalDocuments / limitNum);
 
-  const videos = await Video.find(matchCondition)
-    .populate("category", "name")
-    .sort({ isTopVideo: -1, createdAt: -1 })
-    .skip((pageNum - 1) * limitNum)
-    .limit(limitNum);
+  const videos = await Video.findAll({
+    where: whereCondition,
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+    order: [["isTopVideo", "DESC"], ["createdAt", "DESC"]],
+    offset: (pageNum - 1) * limitNum,
+    limit: limitNum,
+  });
 
   return res.status(200).json(
     new ApiResponse(200, {
@@ -98,17 +101,17 @@ const getVideos = asyncHandler(async (req, res) => {
 const getVideoById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid video ID");
   }
 
-  const video = await Video.findByIdAndUpdate(
-    id,
-    { $inc: { views: 1 } },
-    { new: true }
-  ).populate("category", "name");
+  const video = await Video.findByPk(id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   if (!video) throw new ApiError(404, "Video not found");
+
+  await video.increment("views");
 
   return res
     .status(200)
@@ -120,17 +123,16 @@ const updateVideo = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, description, category, videoUrl, status } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid video ID");
   }
 
-  const video = await Video.findById(id);
+  const video = await Video.findByPk(id);
   if (!video) throw new ApiError(404, "Video not found");
 
-  // Only Admin or Editors should be able to update, covered by role middleware
   if (title) video.title = title;
   if (description !== undefined) video.description = description;
-  if (category) video.category = category;
+  if (category) video.categoryId = category;
   if (status) video.status = status;
 
   if (videoUrl) {
@@ -148,7 +150,9 @@ const updateVideo = asyncHandler(async (req, res) => {
   }
 
   await video.save();
-  const populatedVideo = await Video.findById(video._id).populate("category", "name");
+  const populatedVideo = await Video.findByPk(video.id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   return res
     .status(200)
@@ -159,14 +163,14 @@ const updateVideo = asyncHandler(async (req, res) => {
 const deleteVideo = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid video ID");
   }
 
-  const video = await Video.findById(id);
+  const video = await Video.findByPk(id);
   if (!video) throw new ApiError(404, "Video not found");
 
-  await Video.findByIdAndDelete(id);
+  await video.destroy();
 
   return res
     .status(200)
@@ -177,25 +181,27 @@ const deleteVideo = asyncHandler(async (req, res) => {
 const setTopVideo = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || isNaN(Number(id))) {
     throw new ApiError(400, "Invalid video ID");
   }
 
   // First, unset all top videos
-  await Video.updateMany({}, { isTopVideo: false });
+  await Video.update({ isTopVideo: false }, { where: {} });
 
   // Set the target video as top
-  const video = await Video.findByIdAndUpdate(
-    id,
-    { isTopVideo: true },
-    { new: true }
-  ).populate("category", "name");
-
+  const video = await Video.findByPk(id);
   if (!video) throw new ApiError(404, "Video not found");
+
+  video.isTopVideo = true;
+  await video.save();
+
+  const populatedVideo = await Video.findByPk(id, {
+    include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, video, "Video pinned to top successfully"));
+    .json(new ApiResponse(200, populatedVideo, "Video pinned to top successfully"));
 });
 
 export { createVideo, getVideos, getVideoById, updateVideo, deleteVideo, setTopVideo };

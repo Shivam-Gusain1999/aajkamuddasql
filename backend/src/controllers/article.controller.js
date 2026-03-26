@@ -1,11 +1,9 @@
-import { Article } from "../models/article.model.js";
-// 🚀 THE FIX: Imported Category model which was missing!
-import { Category } from "../models/category.model.js"; 
+import { Article, Category, User } from "../models/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import mongoose from "mongoose";
+import { Op } from "sequelize";
 
 // Utility: Generate SEO-friendly slug from title
 const generateSlug = (title) => {
@@ -32,7 +30,7 @@ const createArticle = asyncHandler(async (req, res) => {
   }
 
   let slug = generateSlug(title);
-  const existingArticle = await Article.findOne({ slug });
+  const existingArticle = await Article.findOne({ where: { slug } });
   if (existingArticle) {
     slug = `${slug}-${Date.now()}`;
   }
@@ -41,8 +39,8 @@ const createArticle = asyncHandler(async (req, res) => {
     title,
     slug,
     content,
-    category,
-    author: req.user._id,
+    categoryId: category,
+    authorId: req.user.id,
     thumbnail: thumbnailUrl,
     status: status || "DRAFT",
   });
@@ -58,18 +56,20 @@ const getArticles = asyncHandler(async (req, res) => {
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
 
-  const matchCondition = { status: "PUBLISHED" };
+  const whereCondition = { status: "PUBLISHED" };
 
-  // SMART CATEGORY FILTERING — case-insensitive regex for Hindi/English
+  // SMART CATEGORY FILTERING — case-insensitive for Hindi/English
   if (category) {
     try {
       const decodedCategory = decodeURIComponent(category).trim();
-      const categoryDoc = await Category.findOne({ 
-        name: { $regex: new RegExp(`^${decodedCategory}$`, 'i') }
+      const categoryDoc = await Category.findOne({
+        where: {
+          name: { [Op.like]: decodedCategory },
+        },
       });
 
       if (categoryDoc) {
-        matchCondition.category = categoryDoc._id;
+        whereCondition.categoryId = categoryDoc.id;
       } else {
         return res.status(200).json(
           new ApiResponse(200, {
@@ -91,49 +91,34 @@ const getArticles = asyncHandler(async (req, res) => {
 
   // 🔍 Search Logic
   if (search) {
-    matchCondition.$or = [
-      { title: { $regex: search, $options: "i" } },
-      { content: { $regex: search, $options: "i" } },
+    whereCondition[Op.or] = [
+      { title: { [Op.like]: `%${search}%` } },
+      { content: { [Op.like]: `%${search}%` } },
     ];
   }
 
   // Get total count for pagination metadata
-  const totalDocuments = await Article.countDocuments(matchCondition);
+  const totalDocuments = await Article.count({ where: whereCondition });
   const totalPages = Math.ceil(totalDocuments / limitNum);
 
-  const pipeline = [
-    { $match: matchCondition },
-    {
-      $lookup: {
-        from: "users",
-        localField: "author",
-        foreignField: "_id",
-        as: "authorDetails",
-        pipeline: [{ $project: { fullName: 1, avatar: 1, username: 1 } }],
+  const articles = await Article.findAll({
+    where: whereCondition,
+    include: [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "fullName", "avatar", "username"],
       },
-    },
-    {
-      $lookup: {
-        from: "categories",
-        localField: "category",
-        foreignField: "_id",
-        as: "categoryDetails",
-        pipeline: [{ $project: { name: 1 } }],
+      {
+        model: Category,
+        as: "category",
+        attributes: ["id", "name"],
       },
-    },
-    {
-      $addFields: {
-        author: { $arrayElemAt: ["$authorDetails", 0] },
-        category: { $arrayElemAt: ["$categoryDetails", 0] },
-      },
-    },
-    { $project: { authorDetails: 0, categoryDetails: 0 } },
-    { $sort: { createdAt: -1 } },
-    { $skip: (pageNum - 1) * limitNum },
-    { $limit: limitNum },
-  ];
-
-  const articles = await Article.aggregate(pipeline);
+    ],
+    order: [["createdAt", "DESC"]],
+    offset: (pageNum - 1) * limitNum,
+    limit: limitNum,
+  });
 
   return res.status(200).json(
     new ApiResponse(
@@ -147,8 +132,8 @@ const getArticles = asyncHandler(async (req, res) => {
           hasNextPage: pageNum < totalPages,
         },
       },
-      "Articles fetched successfully",
-    ),
+      "Articles fetched successfully"
+    )
   );
 });
 
@@ -156,17 +141,28 @@ const getArticles = asyncHandler(async (req, res) => {
 const getArticleBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
 
-  const article = await Article.findOneAndUpdate(
-    { slug, status: "PUBLISHED" },
-    { $inc: { views: 1 } },
-    { new: true },
-  )
-    .populate("author", "fullName avatar username")
-    .populate("category", "name");
+  const article = await Article.findOne({
+    where: { slug, status: "PUBLISHED" },
+    include: [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "fullName", "avatar", "username"],
+      },
+      {
+        model: Category,
+        as: "category",
+        attributes: ["id", "name"],
+      },
+    ],
+  });
 
   if (!article) {
     throw new ApiError(404, "Article not found");
   }
+
+  // Increment views
+  await article.increment("views");
 
   return res
     .status(200)
@@ -178,14 +174,14 @@ const updateArticle = asyncHandler(async (req, res) => {
   const { articleId } = req.params;
   const { title, content, category, status } = req.body;
 
-  const article = await Article.findById(articleId);
+  const article = await Article.findByPk(articleId);
   if (!article) {
     throw new ApiError(404, "Article not found");
   }
 
   // Only author or admin can update
   if (
-    article.author.toString() !== req.user._id.toString() &&
+    article.authorId.toString() !== req.user.id.toString() &&
     req.user.role !== "ADMIN"
   ) {
     throw new ApiError(403, "You don't have permission to update this article");
@@ -196,13 +192,15 @@ const updateArticle = asyncHandler(async (req, res) => {
     article.slug = generateSlug(title);
     // Check slug uniqueness
     const existing = await Article.findOne({
-      slug: article.slug,
-      _id: { $ne: articleId },
+      where: {
+        slug: article.slug,
+        id: { [Op.ne]: articleId },
+      },
     });
     if (existing) article.slug = `${article.slug}-${Date.now()}`;
   }
   if (content) article.content = content;
-  if (category) article.category = category;
+  if (category) article.categoryId = category;
   if (status) article.status = status;
 
   // Handle new thumbnail if uploaded
@@ -223,20 +221,20 @@ const updateArticle = asyncHandler(async (req, res) => {
 const deleteArticle = asyncHandler(async (req, res) => {
   const { articleId } = req.params;
 
-  const article = await Article.findById(articleId);
+  const article = await Article.findByPk(articleId);
   if (!article) {
     throw new ApiError(404, "Article not found");
   }
 
   // Only author or admin can delete
   if (
-    article.author.toString() !== req.user._id.toString() &&
+    article.authorId.toString() !== req.user.id.toString() &&
     req.user.role !== "ADMIN"
   ) {
     throw new ApiError(403, "You don't have permission to delete this article");
   }
 
-  await Article.findByIdAndDelete(articleId);
+  await article.destroy();
 
   return res
     .status(200)

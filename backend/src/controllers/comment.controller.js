@@ -1,6 +1,4 @@
-import mongoose from "mongoose";
-import { Comment } from "../models/comment.model.js";
-import { Article } from "../models/article.model.js";
+import { Comment, Article, User } from "../models/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -9,63 +7,31 @@ const getArticleComments = asyncHandler(async (req, res) => {
   const { articleId } = req.params;
   const { page = 1, limit = 10 } = req.query;
 
-  if (!mongoose.Types.ObjectId.isValid(articleId)) {
+  if (!articleId || isNaN(Number(articleId))) {
     throw new ApiError(400, "Invalid Article ID");
   }
 
-  const article = await Article.findById(articleId);
+  const article = await Article.findByPk(articleId);
   if (!article) {
     throw new ApiError(404, "Article not found");
   }
 
-  const commentsAggregate = Comment.aggregate([
-    {
-      $match: {
-        article: new mongoose.Types.ObjectId(articleId),
-        status: "Approved",
+  const comments = await Comment.findAll({
+    where: {
+      articleId,
+      status: "Approved",
+    },
+    include: [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "fullName", "username", "avatar"],
       },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "author",
-        foreignField: "_id",
-        as: "authorDetails",
-        pipeline: [
-          {
-            $project: {
-              fullName: 1,
-              username: 1,
-              avatar: 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $addFields: {
-        author: { $first: "$authorDetails" },
-      },
-    },
-    {
-      $project: {
-        authorDetails: 0,
-      },
-    },
-    {
-      $sort: {
-        createdAt: -1,
-      },
-    },
-    {
-      $skip: (page - 1) * limit,
-    },
-    {
-      $limit: parseInt(limit),
-    },
-  ]);
-
-  const comments = await commentsAggregate;
+    ],
+    order: [["createdAt", "DESC"]],
+    offset: (page - 1) * limit,
+    limit: parseInt(limit),
+  });
 
   return res
     .status(200)
@@ -76,7 +42,7 @@ const addComment = asyncHandler(async (req, res) => {
   const { articleId } = req.params;
   const { content } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(articleId)) {
+  if (!articleId || isNaN(Number(articleId))) {
     throw new ApiError(400, "Invalid Article ID");
   }
 
@@ -84,15 +50,15 @@ const addComment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Comment content is required");
   }
 
-  const article = await Article.findById(articleId);
+  const article = await Article.findByPk(articleId);
   if (!article) {
     throw new ApiError(404, "Article not found");
   }
 
   const comment = await Comment.create({
     content: content.trim(),
-    article: articleId,
-    author: req.user._id,
+    articleId,
+    authorId: req.user.id,
     status: "Approved",
   });
 
@@ -100,11 +66,16 @@ const addComment = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Error while adding comment");
   }
 
-  // Populate author details so frontend can display name immediately
-  const populatedComment = await Comment.findById(comment._id).populate(
-    "author",
-    "fullName username avatar"
-  );
+  // Fetch with author details so frontend can display name immediately
+  const populatedComment = await Comment.findByPk(comment.id, {
+    include: [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "fullName", "username", "avatar"],
+      },
+    ],
+  });
 
   return res
     .status(201)
@@ -114,11 +85,11 @@ const addComment = asyncHandler(async (req, res) => {
 const deleteComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(commentId)) {
+  if (!commentId || isNaN(Number(commentId))) {
     throw new ApiError(400, "Invalid Comment ID");
   }
 
-  const comment = await Comment.findById(commentId);
+  const comment = await Comment.findByPk(commentId);
 
   if (!comment) {
     throw new ApiError(404, "Comment not found");
@@ -126,16 +97,16 @@ const deleteComment = asyncHandler(async (req, res) => {
 
   // Only allow deletion if the user is the author of the comment or an Admin
   if (
-    comment.author.toString() !== req.user._id.toString() &&
+    comment.authorId.toString() !== req.user.id.toString() &&
     req.user.role !== "ADMIN"
   ) {
     throw new ApiError(
       403,
-      "You do not have permission to delete this comment",
+      "You do not have permission to delete this comment"
     );
   }
 
-  await Comment.findByIdAndDelete(commentId);
+  await comment.destroy();
 
   return res
     .status(200)
@@ -144,10 +115,16 @@ const deleteComment = asyncHandler(async (req, res) => {
 
 // Controller for admin to fetch all comments
 const getAllCommentsForAdmin = asyncHandler(async (req, res) => {
-  // We are populating author details here so the name shows on frontend
-  const comments = await Comment.find()
-    .populate("author", "fullName username")
-    .sort({ createdAt: -1 });
+  const comments = await Comment.findAll({
+    include: [
+      {
+        model: User,
+        as: "author",
+        attributes: ["id", "fullName", "username"],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+  });
 
   return res
     .status(200)
@@ -163,20 +140,15 @@ const updateCommentStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid status");
   }
 
-  const comment = await Comment.findByIdAndUpdate(
-    commentId,
-    { status },
-    { new: true }
-  );
-
+  const comment = await Comment.findByPk(commentId);
   if (!comment) throw new ApiError(404, "Comment not found");
+
+  comment.status = status;
+  await comment.save();
 
   return res
     .status(200)
     .json(new ApiResponse(200, comment, "Comment status updated"));
 });
 
-// Don't forget to export them!
 export { getArticleComments, addComment, deleteComment, getAllCommentsForAdmin, updateCommentStatus };
-
-

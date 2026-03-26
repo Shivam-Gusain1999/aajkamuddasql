@@ -1,91 +1,99 @@
-import mongoose, { Schema } from "mongoose";
+import { DataTypes } from "sequelize";
+import { sequelize } from "../config/db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
-const userSchema = new Schema(
-    {
-        username: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-            index: true,
-        },
-        email: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-        },
-        fullName: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
-        avatar: {
-            type: String, // Cloudinary URL
-            required: false,
-        },
-        password: {
-            type: String,
-            required: [true, "Password is required"],
-        },
-        role: {
-            type: String,
-            enum: ["USER", "REPORTER", "EDITOR", "ADMIN"],
-            default: "USER",
-        },
-        refreshToken: {
-            type: String,
-        },
+const User = sequelize.define(
+  "User",
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
     },
-    {
-        timestamps: true,
+    username: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      unique: true,
+      set(value) {
+        this.setDataValue("username", value?.toLowerCase()?.trim());
+      },
     },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true,
+      set(value) {
+        this.setDataValue("email", value?.toLowerCase()?.trim());
+      },
+    },
+    fullName: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      set(value) {
+        this.setDataValue("fullName", value?.trim());
+      },
+    },
+    avatar: {
+      type: DataTypes.STRING(500), // Cloudinary URL
+      allowNull: true,
+    },
+    password: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    role: {
+      type: DataTypes.ENUM("USER", "REPORTER", "EDITOR", "ADMIN"),
+      defaultValue: "USER",
+    },
+    refreshToken: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+  },
+  {
+    tableName: "users",
+    timestamps: true,
+    hooks: {
+      beforeSave: async (user) => {
+        if (user.changed("password")) {
+          user.password = await bcrypt.hash(user.password, 10);
+        }
+      },
+    },
+  }
 );
 
-// Pre-save hook: Hash password before saving
-// Mongoose 9: No "next" callback — uses async/await natively
-userSchema.pre("save", async function () {
-    if (!this.isModified("password")) return;
-    this.password = await bcrypt.hash(this.password, 10);
-});
-
-// Compare password method
-userSchema.methods.isPasswordCorrect = async function (password) {
-    return await bcrypt.compare(password, this.password);
+// Instance methods
+User.prototype.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
 };
 
-// Generate Access Token (Short lived)
-userSchema.methods.generateAccessToken = function () {
-    return jwt.sign(
-        {
-            _id: this._id,
-            email: this.email,
-            username: this.username,
-            role: this.role,
-        },
-        process.env.ACCESS_TOKEN_SECRET,
-        {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
-        },
-    );
+User.prototype.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this.id,
+      email: this.email,
+      username: this.username,
+      role: this.role,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+    }
+  );
 };
 
-// Generate Refresh Token (Long lived)
-userSchema.methods.generateRefreshToken = function () {
-    return jwt.sign(
-        {
-            _id: this._id,
-        },
-        process.env.REFRESH_TOKEN_SECRET,
-        {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
-        },
-    );
+User.prototype.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this.id,
+    },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    }
+  );
 };
 
-export const User = mongoose.model("User", userSchema);
+export { User };
